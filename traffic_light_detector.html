@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0a0a;
+    color: #e8e8e0;
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .header {
+    background: #111;
+    border-bottom: 1px solid #1e1e1e;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-icon {
+    width: 32px; height: 32px;
+    background: #22c55e22;
+    border: 1px solid #22c55e44;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  .header-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: #e8e8e0;
+  }
+
+  .header-sub {
+    font-size: 10px;
+    color: #555;
+    letter-spacing: 1px;
+    margin-top: 1px;
+  }
+
+  .status-bar {
+    background: #0d0d0d;
+    border-bottom: 1px solid #1a1a1a;
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #555;
+    letter-spacing: 0.5px;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #555;
+    transition: background 0.3s;
+  }
+  .status-dot.active { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+  .status-dot.alert { background: #ef4444; }
+
+  #statusText { color: #888; }
+
+  .camera-area {
+    position: relative;
+    background: #060606;
+    border-bottom: 1px solid #1a1a1a;
+    overflow: hidden;
+    height: 240px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  #videoEl {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: none;
+  }
+
+  #canvasEl { display: none; }
+
+  .camera-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .camera-placeholder {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+
+  .camera-icon {
+    width: 56px; height: 56px;
+    border: 1.5px solid #2a2a2a;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    color: #333;
+  }
+
+  .camera-hint {
+    font-size: 11px;
+    color: #333;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .roi-box {
+    position: absolute;
+    border: 1.5px solid rgba(34,197,94,0.4);
+    border-radius: 4px;
+    pointer-events: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    display: none;
+  }
+  .roi-box.active {
+    border-color: rgba(34,197,94,0.8);
+    box-shadow: 0 0 16px rgba(34,197,94,0.2), inset 0 0 16px rgba(34,197,94,0.05);
+  }
+  .roi-label {
+    position: absolute;
+    top: -20px; left: 0;
+    font-size: 9px;
+    color: rgba(34,197,94,0.7);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  .corner { position: absolute; width: 10px; height: 10px; }
+  .corner.tl { top: -1px; left: -1px; border-top: 2px solid #22c55e; border-left: 2px solid #22c55e; border-radius: 2px 0 0 0; }
+  .corner.tr { top: -1px; right: -1px; border-top: 2px solid #22c55e; border-right: 2px solid #22c55e; border-radius: 0 2px 0 0; }
+  .corner.bl { bottom: -1px; left: -1px; border-bottom: 2px solid #22c55e; border-left: 2px solid #22c55e; border-radius: 0 0 0 2px; }
+  .corner.br { bottom: -1px; right: -1px; border-bottom: 2px solid #22c55e; border-right: 2px solid #22c55e; border-radius: 0 0 2px 0; }
+
+  .green-flash {
+    position: absolute;
+    inset: 0;
+    background: rgba(34, 197, 94, 0);
+    pointer-events: none;
+    transition: background 0.15s;
+  }
+  .green-flash.on { background: rgba(34, 197, 94, 0.15); }
+
+  .controls {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .btn-start {
+    width: 100%;
+    height: 52px;
+    background: #16a34a;
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .btn-start:hover { background: #15803d; }
+  .btn-start:active { transform: scale(0.98); }
+  .btn-start.running {
+    background: #dc2626;
+  }
+  .btn-start.running:hover { background: #b91c1c; }
+
+  .settings-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .setting-card {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .setting-label {
+    font-size: 9px;
+    color: #555;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .setting-card input[type=range] {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 3px;
+    background: #2a2a2a;
+    border-radius: 2px;
+    outline: none;
+  }
+  .setting-card input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #22c55e;
+    cursor: pointer;
+  }
+
+  .setting-value {
+    font-size: 18px;
+    font-family: 'Bebas Neue', sans-serif;
+    color: #22c55e;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .metric-card {
+    background: #0d0d0d;
+    border: 1px solid #1a1a1a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+
+  .metric-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    color: #e8e8e0;
+    line-height: 1;
+  }
+  .metric-val.green { color: #22c55e; }
+  .metric-val.red { color: #ef4444; }
+
+  .metric-label {
+    font-size: 9px;
+    color: #444;
+    letter-spacing: 0.5px;
+    margin-top: 3px;
+    text-transform: uppercase;
+  }
+
+  .alert-banner {
+    background: #14532d;
+    border: 1px solid #16a34a;
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 10px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .alert-banner.show {
+    opacity: 1; transform: translateY(0);
+  }
+
+  .alert-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+    50% { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+  }
+
+  .alert-text {
+    font-size: 13px;
+    color: #4ade80;
+    letter-spacing: 0.5px;
+  }
+
+  .alert-time {
+    margin-left: auto;
+    font-size: 11px;
+    color: #16a34a;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 1px;
+  }
+
+  .log-area {
+    background: #080808;
+    border: 1px solid #151515;
+    border-radius: 8px;
+    padding: 10px 12px;
+    max-height: 80px;
+    overflow-y: auto;
+    font-size: 10px;
+    color: #333;
+    letter-spacing: 0.3px;
+    line-height: 1.8;
+  }
+
+  .log-area::-webkit-scrollbar { width: 3px; }
+  .log-area::-webkit-scrollbar-track { background: transparent; }
+  .log-area::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+  .log-entry { display: flex; gap: 8px; }
+  .log-time { color: #2a2a2a; flex-shrink: 0; }
+  .log-msg.green { color: #16a34a; }
+  .log-msg.red { color: #7f1d1d; }
+  .log-msg.info { color: #1e3a5f; }
+
+  .sensitivity-note {
+    font-size: 10px;
+    color: #2a2a2a;
+    text-align: center;
+    letter-spacing: 0.3px;
+    padding-bottom: 8px;
+  }
+
+  #roiHandle {
+    position: absolute;
+    bottom: 8px; right: 8px;
+    background: rgba(34,197,94,0.15);
+    border: 1px solid rgba(34,197,94,0.3);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 9px;
+    color: rgba(34,197,94,0.6);
+    cursor: move;
+    user-select: none;
+    display: none;
+    letter-spacing: 1px;
+  }
+
+  .camera-btn-row {
+    display: flex; gap: 8px;
+    margin-top: 4px;
+  }
+  .camera-btn {
+    flex: 1;
+    height: 36px;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    color: #888;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+  }
+  .camera-btn:hover { background: #1a1a1a; border-color: #3a3a3a; color: #aaa; }
+  .camera-btn.active { background: #16a34a22; border-color: #22c55e44; color: #22c55e; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">🚦</div>
+  <div>
+    <div class="header-title">GREEN SIGNAL DETECTOR</div>
+    <div class="header-sub">REAL-TIME TRAFFIC LIGHT MONITOR</div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusText">대기 중 — 카메라를 시작하세요</span>
+</div>
+
+<div class="camera-area" id="cameraArea">
+  <video id="videoEl" autoplay playsinline muted></video>
+  <canvas id="canvasEl"></canvas>
+
+  <div class="camera-overlay" id="cameraOverlay">
+    <div class="camera-placeholder" id="camPlaceholder">
+      <div class="camera-icon">📷</div>
+      <div class="camera-hint">신호등을 향해 카메라를 고정하세요</div>
+    </div>
+  </div>
+
+  <div class="roi-box" id="roiBox">
+    <span class="roi-label">DETECT ZONE</span>
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+  </div>
+
+  <div class="green-flash" id="greenFlash"></div>
+  <div id="roiHandle">⊹ ZONE</div>
+</div>
+
+<div class="controls">
+  <button class="btn-start" id="btnStart" onclick="toggleDetection()">▶ 감지 시작</button>
+
+  <div class="camera-btn-row" id="cameraButtons" style="display:none;">
+    <button class="camera-btn" id="btnFront" onclick="switchCamera('front')">전면 카메라</button>
+    <button class="camera-btn active" id="btnBack" onclick="switchCamera('back')">후면 카메라</button>
+  </div>
+
+  <div class="alert-banner" id="alertBanner">
+    <div class="alert-dot"></div>
+    <div class="alert-text">🟢 녹색 신호 감지됨 — 출발하세요!</div>
+    <div class="alert-time" id="alertTime">00:00</div>
+  </div>
+
+  <div class="metrics-row">
+    <div class="metric-card">
+      <div class="metric-val" id="metricGreenPct">0%</div>
+      <div class="metric-label">녹색 비율</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val" id="metricState">대기</div>
+      <div class="metric-label">신호 상태</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val" id="metricAlerts">0</div>
+      <div class="metric-label">알림 횟수</div>
+    </div>
+  </div>
+
+  <div class="settings-row">
+    <div class="setting-card">
+      <div class="setting-label">감도 임계값</div>
+      <div class="setting-value" id="sensitivityVal">3%</div>
+      <input type="range" min="1" max="15" value="3" id="sensitivitySlider" oninput="updateSensitivity(this.value)">
+    </div>
+    <div class="setting-card">
+      <div class="setting-label">알림 쿨다운</div>
+      <div class="setting-value" id="cooldownVal">5초</div>
+      <input type="range" min="2" max="15" value="5" id="cooldownSlider" oninput="updateCooldown(this.value)">
+    </div>
+  </div>
+
+  <div class="log-area" id="logArea">
+    <div class="log-entry">
+      <span class="log-time">--:--</span>
+      <span class="log-msg info">시스템 준비 완료. 감지 시작 버튼을 누르세요.</span>
+    </div>
+  </div>
+
+  <div class="sensitivity-note">※ 거치대에 고정 후 사용 권장 — 운전 중 조작 금지</div>
+</div>
+
+<script>
+let stream = null;
+let animFrame = null;
+let isRunning = false;
+let alertCount = 0;
+let lastAlertTime = 0;
+let sensitivityThreshold = 3;
+let cooldownSec = 5;
+let currentCamera = 'back';
+let consecutiveGreen = 0;
+let currentState = 'RED';
+let audioCtx = null;
+
+const video = document.getElementById('videoEl');
+const canvas = document.getElementById('canvasEl');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('cameraOverlay');
+const placeholder = document.getElementById('camPlaceholder');
+const roiBox = document.getElementById('roiBox');
+const greenFlash = document.getElementById('greenFlash');
+const roiHandle = document.getElementById('roiHandle');
+const cameraArea = document.getElementById('cameraArea');
+
+function getTime() {
+  const d = new Date();
+  return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
+}
+
+function addLog(msg, type='info') {
+  const log = document.getElementById('logArea');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">${getTime()}</span><span class="log-msg ${type}">${msg}</span>`;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+  if (log.children.length > 20) log.removeChild(log.firstChild);
+}
+
+function setStatus(text, active=false, alert=false) {
+  document.getElementById('statusText').textContent = text;
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (active ? ' active' : '') + (alert ? ' alert' : '');
+}
+
+function updateSensitivity(v) {
+  sensitivityThreshold = parseInt(v);
+  document.getElementById('sensitivityVal').textContent = v + '%';
+}
+
+function updateCooldown(v) {
+  cooldownSec = parseInt(v);
+  document.getElementById('cooldownVal').textContent = v + '초';
+}
+
+async function toggleDetection() {
+  if (!isRunning) await startDetection();
+  else stopDetection();
+}
+
+async function startDetection() {
+  try {
+    const facing = currentCamera === 'back' ? 'environment' : 'user';
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    video.srcObject = stream;
+    video.style.display = 'block';
+    placeholder.style.display = 'none';
+    roiBox.style.display = 'block';
+    roiHandle.style.display = 'block';
+    document.getElementById('cameraButtons').style.display = 'flex';
+
+    video.onloadedmetadata = () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      positionROI();
+      isRunning = true;
+      document.getElementById('btnStart').textContent = '⏹ 감지 중지';
+      document.getElementById('btnStart').classList.add('running');
+      setStatus('감지 중 — 신호등을 향해 고정하세요', true);
+      addLog('카메라 시작됨. 실시간 녹색 감지 활성화.', 'info');
+      detectLoop();
+    };
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch(e) {
+    addLog('카메라 접근 실패: ' + e.message, 'red');
+    setStatus('카메라 오류 — 권한을 허용해주세요');
+    alert('카메라 권한을 허용해주세요.\n설정 > 브라우저 > 카메라 권한 확인');
+  }
+}
+
+function stopDetection() {
+  isRunning = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  video.style.display = 'none';
+  placeholder.style.display = 'flex';
+  roiBox.style.display = 'none';
+  roiHandle.style.display = 'none';
+  document.getElementById('cameraButtons').style.display = 'none';
+  document.getElementById('btnStart').textContent = '▶ 감지 시작';
+  document.getElementById('btnStart').classList.remove('running');
+  setStatus('중지됨 — 다시 시작하려면 버튼을 누르세요');
+  updateState('대기', false);
+  addLog('감지 중지됨.', 'info');
+}
+
+function positionROI() {
+  const areaW = cameraArea.offsetWidth;
+  const areaH = cameraArea.offsetHeight;
+  const w = Math.floor(areaW * 0.25);
+  const h = Math.floor(areaH * 0.6);
+  const x = Math.floor(areaW * 0.375);
+  const y = Math.floor(areaH * 0.1);
+  roiBox.style.left = x + 'px';
+  roiBox.style.top = y + 'px';
+  roiBox.style.width = w + 'px';
+  roiBox.style.height = h + 'px';
+}
+
+let isDragging = false, dragStartX, dragStartY, roiStartX, roiStartY;
+roiBox.addEventListener('mousedown', startDrag);
+roiBox.addEventListener('touchstart', e => { e.preventDefault(); startDrag(e.touches[0]); }, {passive:false});
+
+function startDrag(e) {
+  isDragging = true;
+  dragStartX = e.clientX; dragStartY = e.clientY;
+  const rect = roiBox.getBoundingClientRect();
+  const areaRect = cameraArea.getBoundingClientRect();
+  roiStartX = rect.left - areaRect.left;
+  roiStartY = rect.top - areaRect.top;
+}
+
+document.addEventListener('mousemove', doDrag);
+document.addEventListener('touchmove', e => { if(isDragging) { e.preventDefault(); doDrag(e.touches[0]); } }, {passive:false});
+
+function doDrag(e) {
+  if (!isDragging) return;
+  const dx = e.clientX - dragStartX;
+  const dy = e.clientY - dragStartY;
+  const areaW = cameraArea.offsetWidth, areaH = cameraArea.offsetHeight;
+  const rW = roiBox.offsetWidth, rH = roiBox.offsetHeight;
+  const nx = Math.max(0, Math.min(areaW - rW, roiStartX + dx));
+  const ny = Math.max(0, Math.min(areaH - rH, roiStartY + dy));
+  roiBox.style.left = nx + 'px';
+  roiBox.style.top = ny + 'px';
+}
+
+document.addEventListener('mouseup', () => isDragging = false);
+document.addEventListener('touchend', () => isDragging = false);
+
+function getRoiPixels() {
+  const areaRect = cameraArea.getBoundingClientRect();
+  const roiRect = roiBox.getBoundingClientRect();
+  const scaleX = canvas.width / areaRect.width;
+  const scaleY = canvas.height / areaRect.height;
+  const rx = Math.floor((roiRect.left - areaRect.left) * scaleX);
+  const ry = Math.floor((roiRect.top - areaRect.top) * scaleY);
+  const rw = Math.floor(roiRect.width * scaleX);
+  const rh = Math.floor(roiRect.height * scaleY);
+  return [Math.max(0,rx), Math.max(0,ry), Math.min(rw, canvas.width-rx), Math.min(rh, canvas.height-ry)];
+}
+
+function detectLoop() {
+  if (!isRunning) return;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const [rx, ry, rw, rh] = getRoiPixels();
+  if (rw <= 0 || rh <= 0) { animFrame = requestAnimationFrame(detectLoop); return; }
+  const imageData = ctx.getImageData(rx, ry, rw, rh);
+  const data = imageData.data;
+  let greenCount = 0, totalCount = 0;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i+1], b = data[i+2];
+    totalCount++;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const s = max === 0 ? 0 : (max - min) / max;
+    let h = 0;
+    if (max !== min) {
+      if (max === r) h = (g - b) / (max - min);
+      else if (max === g) h = 2 + (b - r) / (max - min);
+      else h = 4 + (r - g) / (max - min);
+      h = ((h * 60) + 360) % 360;
+    }
+    if (h >= 80 && h <= 165 && s > 0.3 && max > 50) greenCount++;
+  }
+
+  const pct = totalCount > 0 ? (greenCount / totalCount * 100) : 0;
+  document.getElementById('metricGreenPct').textContent = Math.round(pct) + '%';
+
+  const isGreen = pct >= sensitivityThreshold;
+
+  if (isGreen) {
+    consecutiveGreen++;
+    roiBox.classList.add('active');
+  } else {
+    consecutiveGreen = 0;
+    roiBox.classList.remove('active');
+  }
+
+  const now = Date.now();
+  if (consecutiveGreen >= 4 && currentState !== 'GREEN') {
+    updateState('녹색', true);
+    if (now - lastAlertTime > cooldownSec * 1000) {
+      triggerAlert();
+      lastAlertTime = now;
+    }
+  } else if (!isGreen && consecutiveGreen === 0 && currentState === 'GREEN') {
+    updateState('적색', false);
+  }
+
+  animFrame = requestAnimationFrame(detectLoop);
+}
+
+function updateState(state, isGreen) {
+  currentState = isGreen ? 'GREEN' : 'RED';
+  const el = document.getElementById('metricState');
+  el.textContent = state;
+  el.className = 'metric-val' + (isGreen ? ' green' : (state === '대기' ? '' : ' red'));
+  setStatus(isGreen ? '🟢 녹색 신호 감지!' : '감지 중 — 신호를 기다리는 중...', true, false);
+}
+
+function triggerAlert() {
+  alertCount++;
+  document.getElementById('metricAlerts').textContent = alertCount;
+
+  document.getElementById('alertTime').textContent = getTime().slice(0,5);
+  const banner = document.getElementById('alertBanner');
+  banner.classList.add('show');
+  setTimeout(() => banner.classList.remove('show'), 4000);
+
+  greenFlash.classList.add('on');
+  setTimeout(() => greenFlash.classList.remove('on'), 300);
+
+  addLog('✓ 녹색 신호 감지 — 알림 발생!', 'green');
+
+  playBeep();
+  vibrate();
+}
+
+function playBeep() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc1 = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc1.type = 'sine'; osc1.frequency.setValueAtTime(880, audioCtx.currentTime);
+    osc2.type = 'sine'; osc2.frequency.setValueAtTime(1100, audioCtx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+    osc1.connect(gain); osc2.connect(gain); gain.connect(audioCtx.destination);
+    osc1.start(audioCtx.currentTime); osc1.stop(audioCtx.currentTime + 0.15);
+    osc2.start(audioCtx.currentTime + 0.15); osc2.stop(audioCtx.currentTime + 0.5);
+  } catch(e) { console.log('audio error', e); }
+}
+
+function vibrate() {
+  if ('vibrate' in navigator) {
+    navigator.vibrate([200, 80, 200, 80, 400]);
+  }
+}
+
+async function switchCamera(facing) {
+  currentCamera = facing;
+  document.getElementById('btnFront').classList.toggle('active', facing === 'front');
+  document.getElementById('btnBack').classList.toggle('active', facing === 'back');
+  if (isRunning) {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (animFrame) cancelAnimationFrame(animFrame);
+    const f = facing === 'back' ? 'environment' : 'user';
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: f, width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        detectLoop();
+      };
+      addLog((facing === 'back' ? '후면' : '전면') + ' 카메라로 전환됨', 'info');
+    } catch(e) { addLog('카메라 전환 실패', 'red'); }
+  }
+}
+
+window.addEventListener('resize', () => { if (isRunning) positionROI(); });
+</script>
+</body>
+</html>
