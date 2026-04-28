@@ -76,6 +76,7 @@
   .corner.bl { bottom:-2px;left:-2px;border-bottom:2px solid #22c55e;border-left:2px solid #22c55e;border-radius:0 0 0 2px; }
   .corner.br { bottom:-2px;right:-2px;border-bottom:2px solid #22c55e;border-right:2px solid #22c55e;border-radius:0 0 2px 0; }
 
+  .tap-hint { position:absolute; bottom:7px; left:50%; transform:translateX(-50%); font-size:10px; color:rgba(255,255,255,0.25); letter-spacing:0.5px; pointer-events:none; white-space:nowrap; display:none; font-family:'IBM Plex Mono',monospace; }
   .orient-badge { position: absolute; top: 7px; right: 7px; font-size: 9px; padding: 3px 7px; border-radius: 4px; background: #111; border: 1px solid #2a2a2a; color: #555; display: none; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.5px; }
   .orient-badge.h { border-color: #f59e0b44; color: #f59e0b; background: #f59e0b12; }
   .orient-badge.v { border-color: #22c55e44; color: #22c55e; background: #22c55e12; }
@@ -200,6 +201,7 @@
     <div class="corner bl"></div><div class="corner br"></div>
   </div>
 
+  <div class="tap-hint" id="tapHint">📍 화면을 탭하면 그 위치로 신호등 고정</div>
   <div class="orient-badge" id="orientBadge"></div>
   <div class="green-flash" id="greenFlash"></div>
 </div>
@@ -310,29 +312,38 @@ function detect(imgData,cw,ch){
   const d=imgData.data,G=22,cW=cw/G,cH=ch/G;
   const S=new Float32Array(G*G);
 
-  for(let py=0;py<ch;py+=2)for(let px=0;px<cw;px+=2){
+  // object-fit:cover 크롭 계산 — 화면에 실제로 보이는 픽셀 범위만 스캔
+  const ar=area.getBoundingClientRect();
+  const dw=ar.width,dh=ar.height;
+  const cvScale=Math.max(dw/cw,dh/ch);
+  const vox=(cw*cvScale-dw)/2, voy=(ch*cvScale-dh)/2;
+  const px0=Math.max(0,Math.floor(vox/cvScale));
+  const py0=Math.max(0,Math.floor(voy/cvScale));
+  const px1=Math.min(cw,Math.ceil((vox+dw)/cvScale));
+  const py1=Math.min(ch,Math.ceil((voy+dh)/cvScale));
+
+  for(let py=py0;py<py1;py+=2)for(let px=px0;px<px1;px+=2){
     const i=(py*cw+px)*4,r=d[i],g=d[i+1],b=d[i+2];
     const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
-    if(mx<80)continue;
+    if(mx<70)continue;
     const sat=(mx-mn)/mx;
-    if(sat<0.5)continue;          // 고채도만 — 흐릿한 색상 제거
+    if(sat<0.4)continue;
     let h=0;
     if(mx!==mn){
       if(mx===r)h=((g-b)/(mx-mn)*60+360)%360;
       else if(mx===g)h=(b-r)/(mx-mn)*60+120;
       else h=(r-g)/(mx-mn)*60+240;
     }
-    const isR=(h<=22||h>=338)&&mx>80;   // 순수 빨강
-    const isY=h>35&&h<=65&&mx>100;       // 순수 노랑
-    const isG=h>95&&h<=150&&mx>60;       // 순수 초록
+    const isR=(h<=25||h>=335)&&mx>70;
+    const isY=h>30&&h<=70&&mx>90;
+    const isG=h>85&&h<=165&&mx>50;
     if(!isR&&!isY&&!isG)continue;
     const cx=Math.min(Math.floor(px/cW),G-1);
     const cy=Math.min(Math.floor(py/cH),G-1);
-    S[cy*G+cx]+=sat*sat*(mx/255);        // sat² → 순수 색상일수록 급격히 높아짐
+    S[cy*G+cx]+=sat*sat*(mx/255);
   }
 
-  // 각 핫셀에서 flood-fill → 클러스터마다 밀도(density) 계산 → 가장 밀집된 것 선택
-  const THR=5;
+  const THR=3;
   const used=new Uint8Array(G*G);
   const dirs=[[-1,0],[1,0],[0,-1],[0,1]];
   let best=null;
@@ -348,15 +359,14 @@ function detect(imgData,cw,ch){
         const nx=cx+dirs[di][0],ny=cy+dirs[di][1];
         if(nx<0||nx>=G||ny<0||ny>=G)continue;
         const ni=ny*G+nx;
-        if(used[ni]||S[ni]<THR*0.4)continue;
+        if(used[ni]||S[ni]<THR*0.3)continue;
         used[ni]=1;q.push(ni);
         if(nx<minX)minX=nx;if(nx>maxX)maxX=nx;
         if(ny<minY)minY=ny;if(ny>maxY)maxY=ny;
         total+=S[ni];cnt++;
       }
     }
-    // 화면의 30% 이상 차지하면 신호등이 아님 (큰 색상 물체 제외)
-    if(cnt>G*G*0.3)continue;
+    if(cnt>G*G*0.35)continue;
     const density=total/cnt;
     if(!best||density>best.density)
       best={minX,maxX,minY,maxY,density};
@@ -382,6 +392,32 @@ function detect(imgData,cw,ch){
     score:best.density,orient:o
   };
 }
+
+// ─── 탭으로 신호등 위치 수동 지정 ───────────────────────────────────────────
+function tapLock(e){
+  if(!running||!canvas.width)return;
+  const ar=area.getBoundingClientRect();
+  const tapX=e.clientX-ar.left, tapY=e.clientY-ar.top;
+  const dw=ar.width,dh=ar.height;
+  const sc=Math.max(dw/canvas.width,dh/canvas.height);
+  const ox=(canvas.width*sc-dw)/2, oy=(canvas.height*sc-dh)/2;
+  const cx=(tapX+ox)/sc, cy=(tapY+oy)/sc;
+  // 탭 지점 기준 ROI (가시 영역의 30%×25% 크기)
+  const rw=(dw/sc)*0.32, rh=(dh/sc)*0.28;
+  roi={
+    x:Math.max(0,cx-rw/2),
+    y:Math.max(0,cy-rh/2),
+    w:Math.min(rw,canvas.width -(cx-rw/2)),
+    h:Math.min(rh,canvas.height-(cy-rh/2)),
+    orient:orientMode==='v'?'v':'h',score:999
+  };
+  orient=roi.orient;ts=TS.L;lostF=0;
+  document.getElementById('scanLineV').style.display='none';
+  document.getElementById('scanLineH').style.display='none';
+  updStatus(TS.L);updRoi(r2s(roi),TS.L,orient);
+  log('📍 탭으로 신호등 위치 고정 — 초록 감지 시작','green');
+}
+area.addEventListener('click',tapLock);
 
 function r2s(r){
   if(!r)return null;
@@ -582,8 +618,9 @@ async function startDet(){
       running=true;
       document.getElementById('btnStart').textContent='⏹ 감지 중지';
       document.getElementById('btnStart').classList.add('running');
+      document.getElementById('tapHint').style.display='block';
       resetTracking();
-      log('카메라 시작. 신호등 자동 탐지 활성화.','info');
+      log('카메라 시작. 자동 탐지 또는 화면 탭으로 위치 지정.','info');
       loop();
     };
   }catch(e){
@@ -600,6 +637,7 @@ function stopDet(){
   document.getElementById('camPlaceholder').style.display='flex';
   ['cameraButtons','orientRow','detectCard'].forEach(id=>document.getElementById(id).style.display='none');
   roiBox.style.display='none';badge.style.display='none';
+  document.getElementById('tapHint').style.display='none';
   document.getElementById('scanLineV').style.display='none';
   document.getElementById('scanLineH').style.display='none';
   document.getElementById('btnStart').textContent='▶ 감지 시작';
