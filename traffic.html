@@ -1,103 +1,173 @@
-
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🚦 Green Signal Detector</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0a0a0a; color: #e8e8e0; font-family: 'IBM Plex Mono', monospace; }
 
-  .header { background: #111; border-bottom: 1px solid #1e1e1e; padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
-  .header-icon { width: 32px; height: 32px; background: #22c55e22; border: 1px solid #22c55e44; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-  .header-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px; color: #e8e8e0; }
-  .header-sub { font-size: 10px; color: #555; letter-spacing: 1px; margin-top: 1px; }
+  html, body {
+    width: 100%;
+    min-height: 100vh;
+    background: #0a0a0a;
+    color: #e8e8e0;
+    font-family: 'IBM Plex Mono', monospace;
+    overflow-x: hidden;
+  }
 
-  .status-bar { background: #0d0d0d; border-bottom: 1px solid #1a1a1a; padding: 8px 20px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: #555; }
-  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #555; transition: background 0.3s; }
+  .header {
+    background: #111;
+    border-bottom: 1px solid #1e1e1e;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header-icon { width: 30px; height: 30px; background: #22c55e22; border: 1px solid #22c55e44; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .header-title { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 2px; }
+  .header-sub { font-size: 9px; color: #555; letter-spacing: 1px; margin-top: 1px; }
+
+  .status-bar {
+    background: #0d0d0d;
+    border-bottom: 1px solid #1a1a1a;
+    padding: 7px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #666;
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #444; flex-shrink: 0; transition: background 0.3s; }
   .status-dot.active { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
-  .status-dot.searching { background: #f59e0b; box-shadow: 0 0 6px #f59e0b88; animation: blink 1s infinite; }
+  .status-dot.searching { background: #f59e0b; animation: blink 1s infinite; }
   @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
 
-  .camera-area { position: relative; background: #060606; border-bottom: 1px solid #1a1a1a; overflow: hidden; height: 260px; display: flex; align-items: center; justify-content: center; }
-  #videoEl { width: 100%; height: 100%; object-fit: cover; display: none; }
+  .camera-area {
+    position: relative;
+    width: 100%;
+    height: 45vw;
+    min-height: 220px;
+    max-height: 360px;
+    background: #050505;
+    border-bottom: 1px solid #1a1a1a;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #videoEl { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
   #canvasEl { display: none; }
 
-  .camera-placeholder { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-  .camera-icon { width: 56px; height: 56px; border: 1.5px solid #2a2a2a; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #333; }
-  .camera-hint { font-size: 11px; color: #333; letter-spacing: 1px; }
+  .cam-placeholder { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .cam-placeholder .icon { font-size: 36px; opacity: 0.2; }
+  .cam-placeholder .hint { font-size: 11px; color: #333; letter-spacing: 1px; }
 
-  .roi-box { position: absolute; border: 2px solid rgba(34,197,94,0.5); border-radius: 6px; pointer-events: none; transition: all 0.25s ease; display: none; }
-  .roi-box.detecting { border-color: rgba(245,158,11,0.8); box-shadow: 0 0 16px rgba(245,158,11,0.25); }
-  .roi-box.locked { border-color: rgba(34,197,94,0.9); box-shadow: 0 0 20px rgba(34,197,94,0.3); }
-  .roi-box.green-active { border-color: #22c55e; box-shadow: 0 0 28px rgba(34,197,94,0.55); }
-  .roi-label { position: absolute; top: -20px; left: 0; font-size: 9px; letter-spacing: 1px; white-space: nowrap; font-family: 'IBM Plex Mono', monospace; color: rgba(34,197,94,0.8); }
-  .roi-label.searching { color: rgba(245,158,11,0.8); }
-  .corner { position: absolute; width: 10px; height: 10px; }
+  .roi-box { position: absolute; border: 2px solid rgba(34,197,94,0.5); border-radius: 5px; pointer-events: none; transition: all 0.25s ease, border-color 0.3s, box-shadow 0.3s; display: none; }
+  .roi-box.detecting { border-color: rgba(245,158,11,0.8); box-shadow: 0 0 14px rgba(245,158,11,0.25); }
+  .roi-box.locked { border-color: rgba(34,197,94,0.9); box-shadow: 0 0 18px rgba(34,197,94,0.3); }
+  .roi-box.green-active { border-color: #22c55e; box-shadow: 0 0 26px rgba(34,197,94,0.55); }
+  .roi-label { position: absolute; top: -18px; left: 0; font-size: 9px; color: rgba(34,197,94,0.8); letter-spacing: 1px; white-space: nowrap; font-family: 'IBM Plex Mono', monospace; }
+  .roi-label.s { color: rgba(245,158,11,0.8); }
+  .corner { position: absolute; width: 9px; height: 9px; }
   .corner.tl { top:-2px;left:-2px;border-top:2px solid #22c55e;border-left:2px solid #22c55e;border-radius:2px 0 0 0; }
   .corner.tr { top:-2px;right:-2px;border-top:2px solid #22c55e;border-right:2px solid #22c55e;border-radius:0 2px 0 0; }
   .corner.bl { bottom:-2px;left:-2px;border-bottom:2px solid #22c55e;border-left:2px solid #22c55e;border-radius:0 0 0 2px; }
   .corner.br { bottom:-2px;right:-2px;border-bottom:2px solid #22c55e;border-right:2px solid #22c55e;border-radius:0 0 2px 0; }
 
-  /* 방향 배지 */
-  .orient-badge { position: absolute; top: 8px; right: 8px; font-size: 9px; font-family: 'IBM Plex Mono', monospace; letter-spacing: 1px; padding: 3px 8px; border-radius: 4px; background: #111; border: 1px solid #2a2a2a; color: #555; display: none; }
-  .orient-badge.h { border-color: #f59e0b44; color: #f59e0b; background: #f59e0b15; }
-  .orient-badge.v { border-color: #22c55e44; color: #22c55e; background: #22c55e15; }
+  .orient-badge { position: absolute; top: 7px; right: 7px; font-size: 9px; padding: 3px 7px; border-radius: 4px; background: #111; border: 1px solid #2a2a2a; color: #555; display: none; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.5px; }
+  .orient-badge.h { border-color: #f59e0b44; color: #f59e0b; background: #f59e0b12; }
+  .orient-badge.v { border-color: #22c55e44; color: #22c55e; background: #22c55e12; }
 
-  .scan-line { position: absolute; left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(245,158,11,0.5),transparent);animation:scanV 2s linear infinite;display:none;pointer-events:none; }
-  @keyframes scanV { 0%{top:0}100%{top:100%} }
-  .scan-line-h { position:absolute;top:0;bottom:0;width:1px;background:linear-gradient(180deg,transparent,rgba(245,158,11,0.5),transparent);animation:scanH 2s linear infinite;display:none;pointer-events:none; }
-  @keyframes scanH { 0%{left:0}100%{left:100%} }
+  .scan-line   { position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(245,158,11,0.45),transparent);animation:sv 2.2s linear infinite;display:none;pointer-events:none; }
+  .scan-line-h { position:absolute;top:0;bottom:0;width:1px;background:linear-gradient(180deg,transparent,rgba(245,158,11,0.45),transparent);animation:sh 2.2s linear infinite;display:none;pointer-events:none; }
+  @keyframes sv{0%{top:0}100%{top:100%}} @keyframes sh{0%{left:0}100%{left:100%}}
 
   .green-flash { position:absolute;inset:0;background:rgba(34,197,94,0);pointer-events:none;transition:background 0.15s; }
-  .green-flash.on { background:rgba(34,197,94,0.15); }
+  .green-flash.on { background:rgba(34,197,94,0.14); }
 
-  .controls { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
-  .btn-start { width:100%;height:52px;background:#16a34a;border:none;border-radius:10px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;cursor:pointer;transition:background 0.2s,transform 0.1s; }
-  .btn-start:hover{background:#15803d} .btn-start:active{transform:scale(0.98)} .btn-start.running{background:#dc2626}
+  .controls { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 
-  .btn-row { display:flex;gap:8px; }
-  .btn-secondary { flex:1;height:38px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#888;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.5px;cursor:pointer;transition:all 0.2s; }
-  .btn-secondary:hover{background:#1a1a1a;border-color:#3a3a3a;color:#aaa}
-  .btn-secondary.active{background:#16a34a22;border-color:#22c55e44;color:#22c55e}
-  .btn-secondary.warn{background:#f59e0b15;border-color:#f59e0b44;color:#f59e0b}
+  .btn-start {
+    width: 100%; height: 48px;
+    background: #16a34a; border: none; border-radius: 10px;
+    color: #fff; font-family: 'Bebas Neue', sans-serif;
+    font-size: 19px; letter-spacing: 3px;
+    cursor: pointer; transition: background 0.2s, transform 0.1s;
+  }
+  .btn-start:hover { background: #15803d; }
+  .btn-start:active { transform: scale(0.98); }
+  .btn-start.running { background: #dc2626; }
 
-  .detect-status-card { background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px; }
-  .detect-icon { width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:#1a1a1a;transition:background 0.3s; }
-  .detect-icon.found{background:#16a34a22} .detect-icon.searching{background:#f59e0b15}
-  .detect-title{font-size:12px;color:#e8e8e0;letter-spacing:0.5px}
-  .detect-sub{font-size:10px;color:#555;margin-top:2px;letter-spacing:0.3px}
+  .btn-row { display: flex; gap: 7px; }
+  .btn-sm {
+    flex: 1; height: 36px;
+    background: #111; border: 1px solid #252525; border-radius: 8px;
+    color: #777; font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px; letter-spacing: 0.5px; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-sm:hover { background: #191919; color: #aaa; }
+  .btn-sm.active { background: #16a34a22; border-color: #22c55e44; color: #22c55e; }
+  .btn-sm.warn { background: #f59e0b12; border-color: #f59e0b44; color: #f59e0b; }
 
-  /* 방향 토글 */
-  .orient-toggle { display:flex;gap:6px;align-items:center; }
-  .orient-btn { flex:1;height:34px;background:#111;border:1px solid #1e1e1e;border-radius:8px;color:#555;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.5px;cursor:pointer;transition:all 0.2s; }
-  .orient-btn:hover{background:#1a1a1a;color:#888}
-  .orient-btn.active{background:#f59e0b15;border-color:#f59e0b55;color:#f59e0b}
-  .orient-btn.active.v{background:#22c55e15;border-color:#22c55e55;color:#22c55e}
-  .orient-label{font-size:9px;color:#333;letter-spacing:1px;white-space:nowrap}
+  .orient-row { display: flex; align-items: center; gap: 8px; }
+  .orient-label { font-size: 9px; color: #444; letter-spacing: 1px; white-space: nowrap; }
+  .orient-btns { display: flex; gap: 5px; flex: 1; }
+  .orient-btn {
+    flex: 1; height: 32px;
+    background: #111; border: 1px solid #1e1e1e; border-radius: 7px;
+    color: #555; font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px; letter-spacing: 0.3px; cursor: pointer; transition: all 0.2s;
+  }
+  .orient-btn:hover { background: #171717; color: #888; }
+  .orient-btn.active { background: #f59e0b12; border-color: #f59e0b44; color: #f59e0b; }
+  .orient-btn.active.v { background: #22c55e12; border-color: #22c55e44; color: #22c55e; }
+  .orient-btn.active.auto { background: #3b82f612; border-color: #3b82f644; color: #60a5fa; }
 
-  .metrics-row { display:grid;grid-template-columns:repeat(3,1fr);gap:8px; }
-  .metric-card { background:#0d0d0d;border:1px solid #1a1a1a;border-radius:8px;padding:10px 12px;text-align:center; }
-  .metric-val { font-family:'Bebas Neue',sans-serif;font-size:22px;color:#e8e8e0;line-height:1; }
+  .detect-card {
+    background: #111; border: 1px solid #1e1e1e; border-radius: 9px;
+    padding: 11px 13px; display: flex; align-items: center; gap: 11px;
+  }
+  .detect-icon { width: 34px; height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; background: #161616; transition: background 0.3s; }
+  .detect-icon.found { background: #16a34a1a; }
+  .detect-icon.searching { background: #f59e0b12; }
+  .detect-title { font-size: 12px; color: #ddd; letter-spacing: 0.3px; }
+  .detect-sub { font-size: 10px; color: #555; margin-top: 2px; }
+
+  .alert-banner {
+    background: #14532d; border: 1px solid #16a34a; border-radius: 9px;
+    padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+    opacity: 0; transform: translateY(4px); transition: opacity 0.3s, transform 0.3s;
+  }
+  .alert-banner.show { opacity: 1; transform: translateY(0); }
+  .alert-dot { width: 9px; height: 9px; border-radius: 50%; background: #22c55e; flex-shrink: 0; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)}50%{box-shadow:0 0 0 5px rgba(34,197,94,0)} }
+  .alert-text { font-size: 13px; color: #4ade80; }
+  .alert-time { margin-left: auto; font-size: 11px; color: #16a34a; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1px; }
+
+  .metrics-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+  .metric-card { background: #0d0d0d; border: 1px solid #191919; border-radius: 8px; padding: 9px 10px; text-align: center; }
+  .metric-val { font-family: 'Bebas Neue', sans-serif; font-size: 20px; line-height: 1; color: #ddd; }
   .metric-val.green{color:#22c55e} .metric-val.amber{color:#f59e0b} .metric-val.red{color:#ef4444}
-  .metric-label{font-size:9px;color:#444;letter-spacing:0.5px;margin-top:3px;text-transform:uppercase}
+  .metric-label { font-size: 9px; color: #444; letter-spacing: 0.5px; margin-top: 3px; text-transform: uppercase; }
 
-  .settings-row { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
-  .setting-card { background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:12px 14px; }
-  .setting-label{font-size:9px;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}
-  .setting-card input[type=range]{width:100%;-webkit-appearance:none;height:3px;background:#2a2a2a;border-radius:2px;outline:none}
-  .setting-card input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#22c55e;cursor:pointer}
-  .setting-value{font-size:18px;font-family:'Bebas Neue',sans-serif;color:#22c55e;letter-spacing:1px;margin-bottom:6px}
+  .settings-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .setting-card { background: #111; border: 1px solid #1e1e1e; border-radius: 9px; padding: 11px 13px; }
+  .setting-label { font-size: 9px; color: #555; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 7px; }
+  .setting-val { font-size: 17px; font-family: 'Bebas Neue', sans-serif; color: #22c55e; letter-spacing: 1px; margin-bottom: 5px; }
+  input[type=range] { width: 100%; -webkit-appearance: none; height: 3px; background: #252525; border-radius: 2px; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #22c55e; cursor: pointer; }
 
-  .alert-banner{background:#14532d;border:1px solid #16a34a;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:10px;opacity:0;transform:translateY(4px);transition:opacity 0.3s,transform 0.3s}
-  .alert-banner.show{opacity:1;transform:translateY(0)}
-  .alert-dot{width:10px;height:10px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:pulse 1s infinite}
-  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
-  .alert-text{font-size:13px;color:#4ade80;letter-spacing:0.5px}
-  .alert-time{margin-left:auto;font-size:11px;color:#16a34a;font-family:'Bebas Neue',sans-serif;letter-spacing:1px}
-
-  .log-area{background:#080808;border:1px solid #151515;border-radius:8px;padding:10px 12px;max-height:80px;overflow-y:auto;font-size:10px;color:#333;letter-spacing:0.3px;line-height:1.8}
-  .log-area::-webkit-scrollbar{width:3px} .log-area::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:2px}
-  .log-entry{display:flex;gap:8px} .log-time{color:#2a2a2a;flex-shrink:0}
+  .log-area { background: #080808; border: 1px solid #141414; border-radius: 7px; padding: 9px 11px; max-height: 80px; overflow-y: auto; font-size: 10px; color: #333; line-height: 1.8; }
+  .log-area::-webkit-scrollbar{width:3px} .log-area::-webkit-scrollbar-thumb{background:#222;border-radius:2px}
+  .log-entry{display:flex;gap:7px} .log-time{color:#252525;flex-shrink:0}
   .log-msg.green{color:#16a34a} .log-msg.amber{color:#92400e} .log-msg.red{color:#7f1d1d} .log-msg.info{color:#1e3a5f}
-  .note{font-size:10px;color:#2a2a2a;text-align:center;padding-bottom:4px}
+
+  .note { font-size: 9px; color: #252525; text-align: center; padding-bottom: 8px; letter-spacing: 0.3px; }
 </style>
+</head>
+<body>
 
 <div class="header">
   <div class="header-icon">🚦</div>
@@ -116,9 +186,9 @@
   <video id="videoEl" autoplay playsinline muted></video>
   <canvas id="canvasEl"></canvas>
 
-  <div class="camera-placeholder" id="camPlaceholder">
-    <div class="camera-icon">📷</div>
-    <div class="camera-hint">가로/세로 신호등 자동 탐지</div>
+  <div class="cam-placeholder" id="camPlaceholder">
+    <div class="icon">📷</div>
+    <div class="hint">가로/세로 신호등 자동 탐지</div>
   </div>
 
   <div class="scan-line" id="scanLineV"></div>
@@ -130,7 +200,7 @@
     <div class="corner bl"></div><div class="corner br"></div>
   </div>
 
-  <div class="orient-badge" id="orientBadge">--</div>
+  <div class="orient-badge" id="orientBadge"></div>
   <div class="green-flash" id="greenFlash"></div>
 </div>
 
@@ -138,24 +208,21 @@
   <button class="btn-start" id="btnStart" onclick="toggleDetection()">▶ 감지 시작</button>
 
   <div class="btn-row" id="cameraButtons" style="display:none;">
-    <button class="btn-secondary" id="btnFront" onclick="switchCamera('front')">전면</button>
-    <button class="btn-secondary active" id="btnBack" onclick="switchCamera('back')">후면</button>
-    <button class="btn-secondary warn" onclick="resetTracking()">↺ 재탐지</button>
+    <button class="btn-sm" id="btnFront" onclick="switchCamera('front')">전면</button>
+    <button class="btn-sm active" id="btnBack" onclick="switchCamera('back')">후면</button>
+    <button class="btn-sm warn" onclick="resetTracking()">↺ 재탐지</button>
   </div>
 
-  <!-- 방향 수동 선택 -->
-  <div id="orientRow" style="display:none;">
-    <div style="display:flex;align-items:center;gap:8px;">
-      <span class="orient-label">배열 방식</span>
-      <div class="orient-toggle" style="flex:1">
-        <button class="orient-btn active" id="btnAuto" onclick="setOrientMode('auto')">🤖 자동</button>
-        <button class="orient-btn" id="btnH" onclick="setOrientMode('h')">🔴🟡🟢 가로 (한국)</button>
-        <button class="orient-btn v" id="btnV" onclick="setOrientMode('v')">세로</button>
-      </div>
+  <div class="orient-row" id="orientRow" style="display:none;">
+    <span class="orient-label">배열</span>
+    <div class="orient-btns">
+      <button class="orient-btn active auto" id="oAuto" onclick="setOrient('auto')">🤖 자동</button>
+      <button class="orient-btn" id="oH" onclick="setOrient('h')">🔴🟡🟢 가로</button>
+      <button class="orient-btn" id="oV" onclick="setOrient('v')">세로</button>
     </div>
   </div>
 
-  <div class="detect-status-card" id="detectStatusCard" style="display:none;">
+  <div class="detect-card" id="detectCard" style="display:none;">
     <div class="detect-icon" id="detectIcon">🔍</div>
     <div>
       <div class="detect-title" id="detectTitle">신호등 탐색 중...</div>
@@ -170,411 +237,374 @@
   </div>
 
   <div class="metrics-row">
-    <div class="metric-card">
-      <div class="metric-val" id="metricGreenPct">0%</div>
-      <div class="metric-label">녹색 비율</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-val" id="metricState">대기</div>
-      <div class="metric-label">신호 상태</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-val" id="metricAlerts">0</div>
-      <div class="metric-label">알림 횟수</div>
-    </div>
+    <div class="metric-card"><div class="metric-val" id="mGreen">--</div><div class="metric-label">녹색 비율</div></div>
+    <div class="metric-card"><div class="metric-val" id="mState">대기</div><div class="metric-label">신호 상태</div></div>
+    <div class="metric-card"><div class="metric-val" id="mAlerts">0</div><div class="metric-label">알림 횟수</div></div>
   </div>
 
   <div class="settings-row">
     <div class="setting-card">
       <div class="setting-label">감지 감도</div>
-      <div class="setting-value" id="sensitivityVal">3%</div>
-      <input type="range" min="1" max="15" value="3" oninput="sensitivityThreshold=parseInt(this.value);document.getElementById('sensitivityVal').textContent=this.value+'%'">
+      <div class="setting-val" id="sVal">3%</div>
+      <input type="range" min="1" max="15" value="3" oninput="sensitivity=+this.value;document.getElementById('sVal').textContent=this.value+'%'">
     </div>
     <div class="setting-card">
       <div class="setting-label">알림 쿨다운</div>
-      <div class="setting-value" id="cooldownVal">5초</div>
-      <input type="range" min="2" max="15" value="5" oninput="cooldownSec=parseInt(this.value);document.getElementById('cooldownVal').textContent=this.value+'초'">
+      <div class="setting-val" id="cVal">5초</div>
+      <input type="range" min="2" max="15" value="5" oninput="cooldown=+this.value;document.getElementById('cVal').textContent=this.value+'초'">
     </div>
   </div>
 
   <div class="log-area" id="logArea">
-    <div class="log-entry"><span class="log-time">--:--</span><span class="log-msg info">한국 신호등(가로 배열) 탐지 모드 로드됨.</span></div>
+    <div class="log-entry"><span class="log-time">--:--</span><span class="log-msg info">KR Edition 준비됨. 가로/세로 자동 탐지 활성화.</span></div>
   </div>
   <div class="note">※ 거치대 고정 후 사용 권장 — 운전 중 조작 금지</div>
 </div>
 
 <script>
-let stream=null, animFrame=null, isRunning=false;
-let alertCount=0, lastAlertTime=0;
-let sensitivityThreshold=3, cooldownSec=5;
-let currentCamera='back';
-let consecutiveGreen=0, currentState='IDLE';
-let audioCtx=null;
+let stream=null,raf=null,running=false;
+let alertCount=0,lastAlert=0,sensitivity=3,cooldown=5;
+let cam='back',consGreen=0,sigState='IDLE',audioCtx=null;
 
-// 탐지 상태
-const TS = {SEARCHING:'searching', CANDIDATE:'candidate', LOCKED:'locked'};
-let trackState=TS.SEARCHING;
-let roi=null, candidateRoi=null, candidateFrames=0, lostFrames=0, scanFrameCount=0;
-let detectedOrientation=null; // 'h' or 'v'
-let orientMode='auto'; // 'auto','h','v'
+const TS={S:'searching',C:'candidate',L:'locked'};
+let ts=TS.S,roi=null,cRoi=null,cFrames=0,lostF=0,sfCount=0,orient=null,orientMode='auto';
 
 const video=document.getElementById('videoEl');
 const canvas=document.getElementById('canvasEl');
 const ctx=canvas.getContext('2d');
-const cameraArea=document.getElementById('cameraArea');
+const area=document.getElementById('cameraArea');
 const roiBox=document.getElementById('roiBox');
 const roiLabel=document.getElementById('roiLabel');
-const greenFlash=document.getElementById('greenFlash');
-const orientBadge=document.getElementById('orientBadge');
+const flash=document.getElementById('greenFlash');
+const badge=document.getElementById('orientBadge');
 
-function getTime(){const d=new Date();return[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>n.toString().padStart(2,'0')).join(':');}
-function addLog(msg,type='info'){
-  const log=document.getElementById('logArea');
-  const e=document.createElement('div');
-  e.className='log-entry';
-  e.innerHTML=`<span class="log-time">${getTime()}</span><span class="log-msg ${type}">${msg}</span>`;
-  log.appendChild(e); log.scrollTop=log.scrollHeight;
-  if(log.children.length>25) log.removeChild(log.firstChild);
+const T=()=>{const d=new Date();return[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>(''+n).padStart(2,'0')).join(':');};
+
+function log(msg,t='info'){
+  const el=document.getElementById('logArea');
+  const e=document.createElement('div');e.className='log-entry';
+  e.innerHTML=`<span class="log-time">${T()}</span><span class="log-msg ${t}">${msg}</span>`;
+  el.appendChild(e);el.scrollTop=el.scrollHeight;
+  if(el.children.length>30)el.removeChild(el.firstChild);
 }
-function setStatus(text,mode='idle'){
-  document.getElementById('statusText').textContent=text;
-  const dot=document.getElementById('statusDot');
-  dot.className='status-dot'+(mode==='active'?' active':mode==='searching'?' searching':'');
+
+function setStatus(txt,mode=''){
+  document.getElementById('statusText').textContent=txt;
+  document.getElementById('statusDot').className='status-dot'+(mode?' '+mode:'');
 }
-function setOrientMode(m){
+
+function setOrient(m){
   orientMode=m;
-  ['btnAuto','btnH','btnV'].forEach(id=>document.getElementById(id).classList.remove('active'));
-  document.getElementById(m==='auto'?'btnAuto':m==='h'?'btnH':'btnV').classList.add('active');
+  ['oAuto','oH','oV'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.className='orient-btn'+(id==='oAuto'?' auto':id==='oV'?' v':'');
+  });
+  const active=m==='auto'?'oAuto':m==='h'?'oH':'oV';
+  document.getElementById(active).classList.add('active');
   resetTracking();
-  addLog(`배열 방식: ${m==='auto'?'자동 감지':m==='h'?'가로 (한국)':'세로'}`, 'info');
+  log(`배열 방식: ${m==='auto'?'자동':m==='h'?'가로(한국)':'세로'}`,'info');
 }
 
-// ─── 핵심: 가로/세로 신호등 탐지 ──────────────────────────────────────
-function detectTrafficLight(imageData, cw, ch) {
-  const data=imageData.data;
-  const GRID=24;
-  const cellW=cw/GRID, cellH=ch/GRID;
+// ─── 신호등 탐지 (가로/세로) ───────────────────────────────────────────
+function detect(imgData,cw,ch){
+  const d=imgData.data,G=22,cW=cw/G,cH=ch/G;
+  const R=new Float32Array(G*G),Gr=new Float32Array(G*G);
 
-  const rScore=new Float32Array(GRID*GRID);
-  const gScore=new Float32Array(GRID*GRID);
-  const yScore=new Float32Array(GRID*GRID); // 노랑도 보조로 사용
-
-  for(let py=0;py<ch;py+=2){ // 2픽셀씩 건너뛰어 속도 향상
-    for(let px=0;px<cw;px+=2){
-      const idx=(py*cw+px)*4;
-      const r=data[idx],g=data[idx+1],b=data[idx+2];
-      const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
-      if(mx<45) continue;
-      const s=(mx-mn)/mx;
-      if(s<0.32) continue;
-      let h=0;
-      if(mx!==mn){
-        if(mx===r) h=((g-b)/(mx-mn)*60+360)%360;
-        else if(mx===g) h=(b-r)/(mx-mn)*60+120;
-        else h=(r-g)/(mx-mn)*60+240;
-      }
-      const cx2=Math.floor(px/cellW), cy2=Math.floor(py/cellH);
-      if(cx2<0||cx2>=GRID||cy2<0||cy2>=GRID) continue;
-      const ci=cy2*GRID+cx2;
-      if((h<=22||h>=338)&&mx>80) rScore[ci]+=1;        // 빨강
-      if(h>=85&&h<=165&&mx>50)   gScore[ci]+=1;        // 초록
-      if(h>=35&&h<=70&&mx>80&&s>0.5) yScore[ci]+=1;   // 노랑
+  for(let py=0;py<ch;py+=2)for(let px=0;px<cw;px+=2){
+    const i=(py*cw+px)*4,r=d[i],g=d[i+1],b=d[i+2];
+    const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+    if(mx<45)continue;
+    const s=(mx-mn)/mx;if(s<0.32)continue;
+    let h=0;
+    if(mx!==mn){
+      if(mx===r)h=((g-b)/(mx-mn)*60+360)%360;
+      else if(mx===g)h=(b-r)/(mx-mn)*60+120;
+      else h=(r-g)/(mx-mn)*60+240;
     }
+    const cx=Math.floor(px/cW),cy=Math.floor(py/cH);
+    if(cx<0||cx>=G||cy<0||cy>=G)continue;
+    const ci=cy*G+cx;
+    if((h<=22||h>=338)&&mx>80)R[ci]+=1;
+    if(h>=85&&h<=165&&mx>50)Gr[ci]+=1;
   }
 
-  let bestH=null, bestV=null;
-  const checkModes=[];
-  if(orientMode==='auto'||orientMode==='h') checkModes.push('h');
-  if(orientMode==='auto'||orientMode==='v') checkModes.push('v');
+  let bH=null,bV=null;
+  const modes=orientMode==='auto'?['h','v']:orientMode==='h'?['h']:['v'];
 
-  for(const mode of checkModes){
-    if(mode==='h'){
-      // 가로 탐지: 같은 행에서 빨강(왼쪽)과 초록(오른쪽)이 배열
-      for(let ry=1;ry<GRID-1;ry++){
-        for(let rcx=0;rcx<GRID-3;rcx++){
-          const rS=rScore[ry*GRID+rcx];
-          if(rS<6) continue;
-          // 초록은 2~5칸 오른쪽
-          for(let gcx=rcx+2;gcx<=Math.min(rcx+6,GRID-1);gcx++){
-            const gS=gScore[ry*GRID+gcx];
-            if(gS<5) continue;
-            const score=rS+gS*1.5;
-            if(!bestH||score>bestH.score){
-              const pad=1;
-              bestH={
-                x:Math.floor(Math.max(0,rcx-pad)*cellW),
-                y:Math.floor(Math.max(0,ry-pad)*cellH),
-                w:Math.floor((gcx-rcx+1+pad*2)*cellW),
-                h:Math.floor((1+pad*2)*cellH),
-                score, orient:'h'
-              };
-            }
+  for(const m of modes){
+    if(m==='h'){
+      // 가로 탐지: 같은 행, 빨강(왼쪽) + 초록(오른쪽)
+      for(let ry=1;ry<G-1;ry++)for(let rc=0;rc<G-3;rc++){
+        const rS=R[ry*G+rc];if(rS<6)continue;
+        for(let gc=rc+2;gc<=Math.min(rc+6,G-1);gc++){
+          const gS=Gr[ry*G+gc];if(gS<5)continue;
+          const sc=rS+gS*1.5;
+          if(!bH||sc>bH.score){
+            const p=1;
+            bH={x:Math.floor(Math.max(0,rc-p)*cW),y:Math.floor(Math.max(0,ry-p)*cH),w:Math.floor((gc-rc+1+p*2)*cW),h:Math.floor((1+p*2)*cH),score:sc,orient:'h'};
           }
         }
       }
     } else {
-      // 세로 탐지: 같은 열에서 빨강(위)과 초록(아래)
-      for(let rcx=1;rcx<GRID-1;rcx++){
-        for(let rcy=0;rcy<GRID-3;rcy++){
-          const rS=rScore[rcy*GRID+rcx];
-          if(rS<6) continue;
-          for(let gcy=rcy+2;gcy<=Math.min(rcy+6,GRID-1);gcy++){
-            const gS=gScore[gcy*GRID+rcx];
-            if(gS<5) continue;
-            const score=rS+gS*1.5;
-            if(!bestV||score>bestV.score){
-              const pad=1;
-              bestV={
-                x:Math.floor(Math.max(0,rcx-pad)*cellW),
-                y:Math.floor(Math.max(0,rcy-pad)*cellH),
-                w:Math.floor((1+pad*2)*cellW),
-                h:Math.floor((gcy-rcy+1+pad*2)*cellH),
-                score, orient:'v'
-              };
-            }
+      // 세로 탐지: 같은 열, 빨강(위) + 초록(아래)
+      for(let rc=1;rc<G-1;rc++)for(let ry=0;ry<G-3;ry++){
+        const rS=R[ry*G+rc];if(rS<6)continue;
+        for(let gy=ry+2;gy<=Math.min(ry+6,G-1);gy++){
+          const gS=Gr[gy*G+rc];if(gS<5)continue;
+          const sc=rS+gS*1.5;
+          if(!bV||sc>bV.score){
+            const p=1;
+            bV={x:Math.floor(Math.max(0,rc-p)*cW),y:Math.floor(Math.max(0,ry-p)*cH),w:Math.floor((1+p*2)*cW),h:Math.floor((gy-ry+1+p*2)*cH),score:sc,orient:'v'};
           }
         }
       }
     }
   }
 
-  // 더 높은 점수의 결과 반환
-  if(bestH&&bestV) return bestH.score>=bestV.score?bestH:bestV;
-  return bestH||bestV||null;
+  if(bH&&bV)return bH.score>=bV.score?bH:bV;
+  return bH||bV||null;
 }
 
-function roiToScreen(r){
-  if(!r) return null;
-  const ar=cameraArea.getBoundingClientRect();
-  return { x:r.x*(ar.width/canvas.width), y:r.y*(ar.height/canvas.height), w:r.w*(ar.width/canvas.width), h:r.h*(ar.height/canvas.height) };
+function r2s(r){
+  if(!r)return null;
+  const ar=area.getBoundingClientRect();
+  return{x:r.x*(ar.width/canvas.width),y:r.y*(ar.height/canvas.height),w:r.w*(ar.width/canvas.width),h:r.h*(ar.height/canvas.height)};
 }
 
-function updateRoiBox(sr, state, orient){
+function updRoi(sr,state,o){
   if(!sr){roiBox.style.display='none';return;}
   roiBox.style.display='block';
-  roiBox.style.left=sr.x+'px'; roiBox.style.top=sr.y+'px';
-  roiBox.style.width=sr.w+'px'; roiBox.style.height=sr.h+'px';
-  roiBox.className='roi-box';
-  roiLabel.className='roi-label';
-  if(state===TS.CANDIDATE){roiBox.classList.add('detecting');roiLabel.classList.add('searching');roiLabel.textContent='확인 중...';}
-  else if(state===TS.LOCKED){
-    roiBox.classList.add('locked');
-    roiLabel.textContent=(orient==='h'?'🔴🟡🟢 가로':'세로')+' 감지 ZONE ✓';
-  }
-  // 방향 배지
-  orientBadge.style.display='block';
-  orientBadge.className='orient-badge '+(orient||'');
-  orientBadge.textContent=orient==='h'?'가로 배열 (KR)':orient==='v'?'세로 배열':'--';
+  roiBox.style.left=sr.x+'px';roiBox.style.top=sr.y+'px';
+  roiBox.style.width=sr.w+'px';roiBox.style.height=sr.h+'px';
+  roiBox.className='roi-box'+(state===TS.C?' detecting':state===TS.L?' locked':'');
+  roiLabel.className='roi-label'+(state===TS.C?' s':'');
+  roiLabel.textContent=state===TS.C?'확인 중...':state===TS.L?(o==='h'?'🔴🟡🟢 가로 ZONE ✓':'세로 ZONE ✓'):'';
+  badge.style.display='block';
+  badge.className='orient-badge '+(o||'');
+  badge.textContent=o==='h'?'가로 (KR)':o==='v'?'세로':'--';
 }
 
-function updateDetectStatus(state, extra){
-  const card=document.getElementById('detectStatusCard');
+function updStatus(state,extra){
+  const card=document.getElementById('detectCard');
   const icon=document.getElementById('detectIcon');
   card.style.display='flex';
-  const title=document.getElementById('detectTitle');
-  const sub=document.getElementById('detectSub');
-  if(state===TS.SEARCHING){
+  const t=document.getElementById('detectTitle'),s=document.getElementById('detectSub');
+  if(state===TS.S){
     icon.className='detect-icon searching';icon.textContent='🔍';
-    title.textContent='신호등 탐색 중...';sub.textContent='카메라를 신호등 방향으로 향해주세요';
-    setStatus('탐색 중 — 신호등을 찾고 있습니다','searching');
-  } else if(state===TS.CANDIDATE){
+    t.textContent='신호등 탐색 중...';s.textContent='카메라를 신호등 방향으로 향해주세요';
+    setStatus('탐색 중...','searching');
+  } else if(state===TS.C){
     icon.className='detect-icon searching';icon.textContent='🎯';
-    title.textContent='신호등 후보 발견 — 확인 중';sub.textContent=`확인 ${extra||0}/8 프레임`;
+    t.textContent='후보 발견 — 확인 중';s.textContent=`확인 ${extra||0}/8 프레임`;
     setStatus('후보 확인 중...','searching');
-  } else if(state===TS.LOCKED){
+  } else if(state===TS.L){
     icon.className='detect-icon found';icon.textContent='✅';
-    const oLabel=detectedOrientation==='h'?'가로 배열 (한국형)':'세로 배열';
-    title.textContent=`신호등 고정 — ${oLabel}`;sub.textContent='녹색 전환 감지 대기 중';
-    setStatus('감지 중 — 신호등 추적 완료','active');
+    t.textContent=`고정 완료 — ${orient==='h'?'가로(한국형)':'세로'}`;
+    s.textContent='녹색 전환 감지 대기 중';
+    setStatus('감지 중 — 추적 완료','active');
   }
 }
 
 function resetTracking(){
-  trackState=TS.SEARCHING; roi=null; candidateRoi=null;
-  candidateFrames=0; lostFrames=0; detectedOrientation=null;
-  roiBox.className='roi-box'; roiBox.style.display='none';
-  orientBadge.style.display='none';
-  updateDetectStatus(TS.SEARCHING);
+  ts=TS.S;roi=null;cRoi=null;cFrames=0;lostF=0;orient=null;
+  roiBox.style.display='none';badge.style.display='none';
+  updStatus(TS.S);
   document.getElementById('scanLineV').style.display='block';
   document.getElementById('scanLineH').style.display='block';
-  addLog('신호등 재탐지 시작','amber');
-  document.getElementById('metricState').textContent='탐색';
-  document.getElementById('metricState').className='metric-val amber';
+  document.getElementById('mState').textContent='탐색';
+  document.getElementById('mState').className='metric-val amber';
+  log('재탐지 시작','amber');
 }
 
-function isSimilarRoi(a,b){
-  if(!a||!b) return false;
-  const cx1=a.x+a.w/2,cy1=a.y+a.h/2,cx2=b.x+b.w/2,cy2=b.y+b.h/2;
+function simRoi(a,b,alpha){
+  return{x:a.x*(1-alpha)+b.x*alpha,y:a.y*(1-alpha)+b.y*alpha,w:a.w*(1-alpha)+b.w*alpha,h:a.h*(1-alpha)+b.h*alpha,score:b.score,orient:b.orient};
+}
+
+function simCheck(a,b){
+  if(!a||!b)return false;
   const mx=Math.max(canvas.width,canvas.height);
-  return Math.abs(cx1-cx2)/mx<0.28&&Math.abs(cy1-cy2)/mx<0.28;
+  return Math.abs((a.x+a.w/2)-(b.x+b.w/2))/mx<0.28&&Math.abs((a.y+a.h/2)-(b.y+b.h/2))/mx<0.28;
 }
-function smoothRoi(o,n,a){return{x:o.x*(1-a)+n.x*a,y:o.y*(1-a)+n.y*a,w:o.w*(1-a)+n.w*a,h:o.h*(1-a)+n.h*a,score:n.score,orient:n.orient};}
 
-// ─── 메인 루프 ─────────────────────────────────────────────────────────
-function detectLoop(){
-  if(!isRunning) return;
+// ─── 메인 루프 ──────────────────────────────────────────────────────────
+function loop(){
+  if(!running)return;
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
-  const fullImg=ctx.getImageData(0,0,canvas.width,canvas.height);
-  scanFrameCount++;
+  const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+  sfCount++;
 
-  const shouldScan=trackState!==TS.LOCKED?(scanFrameCount%4===0):(scanFrameCount%30===0);
+  const scan=ts!==TS.L?(sfCount%4===0):(sfCount%30===0);
 
-  if(shouldScan){
-    const found=detectTrafficLight(fullImg,canvas.width,canvas.height);
-
-    if(trackState===TS.SEARCHING){
-      if(found){candidateRoi=found;candidateFrames=1;trackState=TS.CANDIDATE;updateDetectStatus(TS.CANDIDATE,1);updateRoiBox(roiToScreen(found),TS.CANDIDATE,found.orient);}
-    } else if(trackState===TS.CANDIDATE){
-      if(found&&isSimilarRoi(found,candidateRoi)){
-        candidateFrames++;
-        candidateRoi=smoothRoi(candidateRoi,found,0.4);
-        updateDetectStatus(TS.CANDIDATE,candidateFrames);
-        updateRoiBox(roiToScreen(candidateRoi),TS.CANDIDATE,found.orient);
-        if(candidateFrames>=8){
-          roi=candidateRoi; detectedOrientation=roi.orient;
-          trackState=TS.LOCKED; lostFrames=0;
+  if(scan){
+    const f=detect(img,canvas.width,canvas.height);
+    if(ts===TS.S){
+      if(f){cRoi=f;cFrames=1;ts=TS.C;updStatus(TS.C,1);updRoi(r2s(f),TS.C,f.orient);}
+    } else if(ts===TS.C){
+      if(f&&simCheck(f,cRoi)){
+        cFrames++;cRoi=simRoi(cRoi,f,0.4);updStatus(TS.C,cFrames);updRoi(r2s(cRoi),TS.C,f.orient);
+        if(cFrames>=8){
+          roi=cRoi;orient=roi.orient;ts=TS.L;lostF=0;
           document.getElementById('scanLineV').style.display='none';
           document.getElementById('scanLineH').style.display='none';
-          updateDetectStatus(TS.LOCKED);
-          updateRoiBox(roiToScreen(roi),TS.LOCKED,detectedOrientation);
-          addLog(`신호등 고정! ${detectedOrientation==='h'?'가로(한국형)':'세로'} 배열 감지.`,'green');
+          updStatus(TS.L);updRoi(r2s(roi),TS.L,orient);
+          log(`신호등 고정! ${orient==='h'?'가로(한국형)':'세로'} 배열`,'green');
         }
-      } else {candidateFrames=0;candidateRoi=null;trackState=TS.SEARCHING;updateDetectStatus(TS.SEARCHING);updateRoiBox(null);}
-    } else if(trackState===TS.LOCKED){
-      if(found&&isSimilarRoi(found,roi)){roi=smoothRoi(roi,found,0.1);lostFrames=0;updateRoiBox(roiToScreen(roi),TS.LOCKED,detectedOrientation);}
-      else{lostFrames++;if(lostFrames>60){addLog('신호등 놓침 — 재탐지','amber');resetTracking();}}
+      } else {cFrames=0;cRoi=null;ts=TS.S;updStatus(TS.S);updRoi(null);}
+    } else {
+      if(f&&simCheck(f,roi)){roi=simRoi(roi,f,0.1);lostF=0;updRoi(r2s(roi),TS.L,orient);}
+      else{lostF++;if(lostF>60){log('신호등 놓침 — 재탐지','amber');resetTracking();}}
     }
   }
 
   // 녹색 감지
-  let greenPct=0;
-  if(trackState===TS.LOCKED&&roi){
-    const rx=Math.max(0,Math.floor(roi.x)), ry=Math.max(0,Math.floor(roi.y));
-    const rw=Math.min(Math.floor(roi.w),canvas.width-rx), rh=Math.min(Math.floor(roi.h),canvas.height-ry);
-
+  let gPct=0;
+  if(ts===TS.L&&roi){
+    const rx=Math.max(0,Math.floor(roi.x)),ry=Math.max(0,Math.floor(roi.y));
+    const rw=Math.min(Math.floor(roi.w),canvas.width-rx),rh=Math.min(Math.floor(roi.h),canvas.height-ry);
     if(rw>4&&rh>4){
       let gx=rx,gy=ry,gw=rw,gh=rh;
-      // 가로 배열: 오른쪽 1/3에서 초록 감지
-      if(detectedOrientation==='h'){gx=rx+Math.floor(rw*0.6);gw=Math.floor(rw*0.4);}
-      // 세로 배열: 하단 1/2에서 초록 감지
+      if(orient==='h'){gx=rx+Math.floor(rw*0.6);gw=Math.floor(rw*0.4);}
       else{gy=ry+Math.floor(rh*0.5);gh=Math.floor(rh*0.5);}
-
       if(gw>2&&gh>2){
-        const rd=ctx.getImageData(gx,gy,gw,gh);
-        const d2=rd.data;
-        let gc=0,total=0;
+        const rd=ctx.getImageData(gx,gy,gw,gh),d2=rd.data;
+        let gc=0,tot=0;
         for(let i=0;i<d2.length;i+=4){
           const r2=d2[i],g2=d2[i+1],b2=d2[i+2];
           const mx=Math.max(r2,g2,b2),mn=Math.min(r2,g2,b2);
-          total++;
-          if(mx<40) continue;
+          tot++;if(mx<40)continue;
           const s2=(mx-mn)/mx;
           let h2=0;
-          if(mx!==mn){if(mx===r2)h2=((g2-b2)/(mx-mn)*60+360)%360;else if(mx===g2)h2=(b2-r2)/(mx-mn)*60+120;else h2=(r2-g2)/(mx-mn)*60+240;}
-          if(h2>=85&&h2<=165&&s2>0.3&&mx>50) gc++;
+          if(mx!==mn){
+            if(mx===r2)h2=((g2-b2)/(mx-mn)*60+360)%360;
+            else if(mx===g2)h2=(b2-r2)/(mx-mn)*60+120;
+            else h2=(r2-g2)/(mx-mn)*60+240;
+          }
+          if(h2>=85&&h2<=165&&s2>0.3&&mx>50)gc++;
         }
-        greenPct=total>0?gc/total*100:0;
+        gPct=tot>0?gc/tot*100:0;
       }
     }
 
-    document.getElementById('metricGreenPct').textContent=Math.round(greenPct)+'%';
-    const isGreen=greenPct>=sensitivityThreshold;
-    if(isGreen){consecutiveGreen++;roiBox.classList.add('green-active');}
-    else{consecutiveGreen=0;roiBox.classList.remove('green-active');}
+    document.getElementById('mGreen').textContent=Math.round(gPct)+'%';
+    const isG=gPct>=sensitivity;
+    if(isG){consGreen++;roiBox.classList.add('green-active');}
+    else{consGreen=0;roiBox.classList.remove('green-active');}
 
     const now=Date.now();
-    if(consecutiveGreen>=4&&currentState!=='GREEN'){
-      currentState='GREEN'; updateSignalState('녹색',true);
-      if(now-lastAlertTime>cooldownSec*1000){triggerAlert();lastAlertTime=now;}
-    } else if(!isGreen&&consecutiveGreen===0&&currentState==='GREEN'){
-      currentState='RED'; updateSignalState('적색',false);
+    if(consGreen>=4&&sigState!=='GREEN'){
+      sigState='GREEN';setSig('녹색',true);
+      if(now-lastAlert>cooldown*1000){doAlert();lastAlert=now;}
+    } else if(!isG&&consGreen===0&&sigState==='GREEN'){
+      sigState='RED';setSig('적색',false);
     }
   } else {
-    document.getElementById('metricGreenPct').textContent='--';
+    document.getElementById('mGreen').textContent='--';
   }
 
-  animFrame=requestAnimationFrame(detectLoop);
+  raf=requestAnimationFrame(loop);
 }
 
-function updateSignalState(label,isGreen){
-  const el=document.getElementById('metricState');
+function setSig(label,isG){
+  const el=document.getElementById('mState');
   el.textContent=label;
-  el.className='metric-val'+(isGreen?' green':label==='대기'?'':' red');
+  el.className='metric-val'+(isG?' green':' red');
 }
-function triggerAlert(){
+
+function doAlert(){
   alertCount++;
-  document.getElementById('metricAlerts').textContent=alertCount;
-  document.getElementById('alertTime').textContent=getTime().slice(0,5);
+  document.getElementById('mAlerts').textContent=alertCount;
+  document.getElementById('alertTime').textContent=T().slice(0,5);
   document.getElementById('alertBanner').classList.add('show');
   setTimeout(()=>document.getElementById('alertBanner').classList.remove('show'),4000);
-  greenFlash.classList.add('on'); setTimeout(()=>greenFlash.classList.remove('on'),300);
-  addLog('✓ 녹색 신호 감지 — 알림!','green');
-  playBeep(); vibrate();
+  flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),300);
+  log('✓ 녹색 신호 감지 — 알림 발생!','green');
+  beep();vibrate();
 }
-function playBeep(){
+
+function beep(){
   try{
-    if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    if(audioCtx.state==='suspended') audioCtx.resume();
-    const o1=audioCtx.createOscillator(),o2=audioCtx.createOscillator(),gain=audioCtx.createGain();
-    o1.type='sine';o1.frequency.value=880; o2.type='sine';o2.frequency.value=1100;
-    gain.gain.setValueAtTime(0.4,audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.6);
-    o1.connect(gain);o2.connect(gain);gain.connect(audioCtx.destination);
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended')audioCtx.resume();
+    const o1=audioCtx.createOscillator(),o2=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o1.type='sine';o1.frequency.value=880;
+    o2.type='sine';o2.frequency.value=1100;
+    g.gain.setValueAtTime(0.4,audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.6);
+    o1.connect(g);o2.connect(g);g.connect(audioCtx.destination);
     o1.start();o1.stop(audioCtx.currentTime+0.15);
     o2.start(audioCtx.currentTime+0.15);o2.stop(audioCtx.currentTime+0.5);
   }catch(e){}
 }
-function vibrate(){if('vibrate'in navigator)navigator.vibrate([200,80,200,80,400]);}
 
-async function toggleDetection(){if(!isRunning) await startDetection(); else stopDetection();}
-async function startDetection(){
+function vibrate(){
+  if('vibrate'in navigator)navigator.vibrate([200,80,200,80,400]);
+}
+
+async function toggleDetection(){
+  if(!running)await startDet();else stopDet();
+}
+
+async function startDet(){
   try{
-    const facing=currentCamera==='back'?'environment':'user';
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:640},height:{ideal:480}}});
-    video.srcObject=stream; video.style.display='block';
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:cam==='back'?'environment':'user',width:{ideal:640},height:{ideal:480}}
+    });
+    video.srcObject=stream;video.style.display='block';
     document.getElementById('camPlaceholder').style.display='none';
     document.getElementById('cameraButtons').style.display='flex';
-    document.getElementById('orientRow').style.display='block';
-    document.getElementById('detectStatusCard').style.display='flex';
+    document.getElementById('orientRow').style.display='flex';
+    document.getElementById('detectCard').style.display='flex';
     audioCtx=new(window.AudioContext||window.webkitAudioContext)();
     video.onloadedmetadata=()=>{
-      canvas.width=video.videoWidth; canvas.height=video.videoHeight;
-      isRunning=true;
+      canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+      running=true;
       document.getElementById('btnStart').textContent='⏹ 감지 중지';
       document.getElementById('btnStart').classList.add('running');
       resetTracking();
-      addLog('카메라 시작. 가로/세로 신호등 자동 탐지 활성화.','info');
-      detectLoop();
+      log('카메라 시작. 신호등 자동 탐지 활성화.','info');
+      loop();
     };
-  }catch(e){addLog('카메라 실패: '+e.message,'red');alert('카메라 권한을 허용해주세요.');}
+  }catch(e){
+    log('카메라 실패: '+e.message,'red');
+    alert('카메라 권한을 허용해주세요.\n설정 > 브라우저 > 카메라 권한 확인');
+  }
 }
-function stopDetection(){
-  isRunning=false;
-  if(animFrame) cancelAnimationFrame(animFrame);
-  if(stream) stream.getTracks().forEach(t=>t.stop());
+
+function stopDet(){
+  running=false;
+  if(raf)cancelAnimationFrame(raf);
+  if(stream)stream.getTracks().forEach(t=>t.stop());
   video.style.display='none';
   document.getElementById('camPlaceholder').style.display='flex';
-  ['cameraButtons','orientRow','detectStatusCard'].forEach(id=>document.getElementById(id).style.display='none');
-  roiBox.style.display='none'; orientBadge.style.display='none';
+  ['cameraButtons','orientRow','detectCard'].forEach(id=>document.getElementById(id).style.display='none');
+  roiBox.style.display='none';badge.style.display='none';
   document.getElementById('scanLineV').style.display='none';
   document.getElementById('scanLineH').style.display='none';
   document.getElementById('btnStart').textContent='▶ 감지 시작';
   document.getElementById('btnStart').classList.remove('running');
-  currentState='IDLE'; setStatus('중지됨');
-  addLog('감지 중지됨.','info');
+  sigState='IDLE';setStatus('중지됨');
+  log('감지 중지됨.','info');
 }
-async function switchCamera(facing){
-  currentCamera=facing;
-  document.getElementById('btnFront').classList.toggle('active',facing==='front');
-  document.getElementById('btnBack').classList.toggle('active',facing==='back');
-  if(!isRunning) return;
-  if(stream) stream.getTracks().forEach(t=>t.stop());
-  if(animFrame) cancelAnimationFrame(animFrame);
+
+async function switchCamera(f){
+  cam=f;
+  document.getElementById('btnFront').classList.toggle('active',f==='front');
+  document.getElementById('btnBack').classList.toggle('active',f==='back');
+  if(!running)return;
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  if(raf)cancelAnimationFrame(raf);
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing==='back'?'environment':'user',width:{ideal:640},height:{ideal:480}}});
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:f==='back'?'environment':'user',width:{ideal:640},height:{ideal:480}}
+    });
     video.srcObject=stream;
-    video.onloadedmetadata=()=>{canvas.width=video.videoWidth;canvas.height=video.videoHeight;resetTracking();detectLoop();};
-    addLog((facing==='back'?'후면':'전면')+' 카메라 전환','info');
-  }catch(e){addLog('전환 실패','red');}
+    video.onloadedmetadata=()=>{
+      canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+      resetTracking();loop();
+    };
+    log((f==='back'?'후면':'전면')+' 카메라 전환','info');
+  }catch(e){log('전환 실패','red');}
 }
 </script>
+</body>
+</html>
