@@ -305,64 +305,76 @@ function setOrient(m){
   log(`배열 방식: ${m==='auto'?'자동':m==='h'?'가로(한국)':'세로'}`,'info');
 }
 
-// ─── 신호등 탐지 (가로/세로) ───────────────────────────────────────────
+// ─── 신호등 탐지 (빨강/노랑/초록 아무 불이든 감지) ──────────────────────
 function detect(imgData,cw,ch){
   const d=imgData.data,G=22,cW=cw/G,cH=ch/G;
-  const R=new Float32Array(G*G),Gr=new Float32Array(G*G);
+  const S=new Float32Array(G*G);
 
   for(let py=0;py<ch;py+=2)for(let px=0;px<cw;px+=2){
     const i=(py*cw+px)*4,r=d[i],g=d[i+1],b=d[i+2];
     const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
-    if(mx<45)continue;
-    const s=(mx-mn)/mx;if(s<0.32)continue;
+    if(mx<55)continue;
+    const sat=(mx-mn)/mx;if(sat<0.38)continue;
     let h=0;
     if(mx!==mn){
       if(mx===r)h=((g-b)/(mx-mn)*60+360)%360;
       else if(mx===g)h=(b-r)/(mx-mn)*60+120;
       else h=(r-g)/(mx-mn)*60+240;
     }
-    const cx=Math.floor(px/cW),cy=Math.floor(py/cH);
-    if(cx<0||cx>=G||cy<0||cy>=G)continue;
-    const ci=cy*G+cx;
-    if((h<=22||h>=338)&&mx>80)R[ci]+=1;
-    if(h>=85&&h<=165&&mx>50)Gr[ci]+=1;
+    const isR=(h<=28||h>=332)&&mx>75;
+    const isY=h>28&&h<=68&&mx>90;
+    const isG=h>78&&h<=165&&mx>45;
+    if(!isR&&!isY&&!isG)continue;
+    const cx=Math.min(Math.floor(px/cW),G-1);
+    const cy=Math.min(Math.floor(py/cH),G-1);
+    S[cy*G+cx]+=sat*mx;
   }
 
-  let bH=null,bV=null;
-  const modes=orientMode==='auto'?['h','v']:orientMode==='h'?['h']:['v'];
+  // 최고 점수 셀 찾기
+  let maxS=0,pi=0;
+  for(let i=0;i<G*G;i++)if(S[i]>maxS){maxS=S[i];pi=i;}
+  if(maxS<600)return null;
 
-  for(const m of modes){
-    if(m==='h'){
-      // 가로 탐지: 같은 행, 빨강(왼쪽) + 초록(오른쪽)
-      for(let ry=1;ry<G-1;ry++)for(let rc=0;rc<G-3;rc++){
-        const rS=R[ry*G+rc];if(rS<6)continue;
-        for(let gc=rc+2;gc<=Math.min(rc+6,G-1);gc++){
-          const gS=Gr[ry*G+gc];if(gS<5)continue;
-          const sc=rS+gS*1.5;
-          if(!bH||sc>bH.score){
-            const p=1;
-            bH={x:Math.floor(Math.max(0,rc-p)*cW),y:Math.floor(Math.max(0,ry-p)*cH),w:Math.floor((gc-rc+1+p*2)*cW),h:Math.floor((1+p*2)*cH),score:sc,orient:'h'};
-          }
-        }
-      }
-    } else {
-      // 세로 탐지: 같은 열, 빨강(위) + 초록(아래)
-      for(let rc=1;rc<G-1;rc++)for(let ry=0;ry<G-3;ry++){
-        const rS=R[ry*G+rc];if(rS<6)continue;
-        for(let gy=ry+2;gy<=Math.min(ry+6,G-1);gy++){
-          const gS=Gr[gy*G+rc];if(gS<5)continue;
-          const sc=rS+gS*1.5;
-          if(!bV||sc>bV.score){
-            const p=1;
-            bV={x:Math.floor(Math.max(0,rc-p)*cW),y:Math.floor(Math.max(0,ry-p)*cH),w:Math.floor((1+p*2)*cW),h:Math.floor((gy-ry+1+p*2)*cH),score:sc,orient:'v'};
-          }
-        }
-      }
+  // 인접 셀 확장 (region growing)
+  const seedX=pi%G,seedY=Math.floor(pi/G);
+  const used=new Uint8Array(G*G);
+  const q=[[seedX,seedY]];used[pi]=1;
+  let minX=seedX,maxX=seedX,minY=seedY,maxY=seedY,totalS=maxS;
+  const nbThr=Math.max(280,maxS*0.22);
+  const dirs=[[-1,0],[1,0],[0,-1],[0,1]];
+
+  for(let qi=0;qi<q.length;qi++){
+    const cx=q[qi][0],cy=q[qi][1];
+    for(let di=0;di<4;di++){
+      const nx=cx+dirs[di][0],ny=cy+dirs[di][1];
+      if(nx<0||nx>=G||ny<0||ny>=G)continue;
+      const ni=ny*G+nx;
+      if(used[ni]||S[ni]<nbThr)continue;
+      used[ni]=1;q.push([nx,ny]);
+      if(nx<minX)minX=nx;if(nx>maxX)maxX=nx;
+      if(ny<minY)minY=ny;if(ny>maxY)maxY=ny;
+      totalS+=S[ni];
     }
   }
 
-  if(bH&&bV)return bH.score>=bV.score?bH:bV;
-  return bH||bV||null;
+  // 방향 결정
+  const clW=maxX-minX+1,clH=maxY-minY+1;
+  let o=orientMode==='auto'
+    ?(clW>clH*1.4?'h':clH>clW*1.4?'v':'h')
+    :orientMode;
+
+  // 한 불만 켜진 경우에도 ROI가 신호등 전체를 커버하도록 확장
+  const p=1;
+  if(o==='h'){maxX=Math.min(G-1,Math.max(maxX,minX+4));}
+  else       {maxY=Math.min(G-1,Math.max(maxY,minY+3));}
+
+  return{
+    x:Math.floor(Math.max(0,minX-p)*cW),
+    y:Math.floor(Math.max(0,minY-p)*cH),
+    w:Math.floor((maxX-minX+1+p*2)*cW),
+    h:Math.floor((maxY-minY+1+p*2)*cH),
+    score:totalS,orient:o
+  };
 }
 
 function r2s(r){
@@ -446,7 +458,7 @@ function loop(){
     } else if(ts===TS.C){
       if(f&&simCheck(f,cRoi)){
         cFrames++;cRoi=simRoi(cRoi,f,0.4);updStatus(TS.C,cFrames);updRoi(r2s(cRoi),TS.C,f.orient);
-        if(cFrames>=8){
+        if(cFrames>=5){
           roi=cRoi;orient=roi.orient;ts=TS.L;lostF=0;
           document.getElementById('scanLineV').style.display='none';
           document.getElementById('scanLineH').style.display='none';
