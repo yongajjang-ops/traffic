@@ -305,7 +305,7 @@ function setOrient(m){
   log(`배열 방식: ${m==='auto'?'자동':m==='h'?'가로(한국)':'세로'}`,'info');
 }
 
-// ─── 신호등 탐지 (빨강/노랑/초록 아무 불이든 감지) ──────────────────────
+// ─── 신호등 탐지 ─────────────────────────────────────────────────────────
 function detect(imgData,cw,ch){
   const d=imgData.data,G=22,cW=cw/G,cH=ch/G;
   const S=new Float32Array(G*G);
@@ -313,67 +313,73 @@ function detect(imgData,cw,ch){
   for(let py=0;py<ch;py+=2)for(let px=0;px<cw;px+=2){
     const i=(py*cw+px)*4,r=d[i],g=d[i+1],b=d[i+2];
     const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
-    if(mx<55)continue;
-    const sat=(mx-mn)/mx;if(sat<0.38)continue;
+    if(mx<80)continue;
+    const sat=(mx-mn)/mx;
+    if(sat<0.5)continue;          // 고채도만 — 흐릿한 색상 제거
     let h=0;
     if(mx!==mn){
       if(mx===r)h=((g-b)/(mx-mn)*60+360)%360;
       else if(mx===g)h=(b-r)/(mx-mn)*60+120;
       else h=(r-g)/(mx-mn)*60+240;
     }
-    const isR=(h<=28||h>=332)&&mx>75;
-    const isY=h>28&&h<=68&&mx>90;
-    const isG=h>78&&h<=165&&mx>45;
+    const isR=(h<=22||h>=338)&&mx>80;   // 순수 빨강
+    const isY=h>35&&h<=65&&mx>100;       // 순수 노랑
+    const isG=h>95&&h<=150&&mx>60;       // 순수 초록
     if(!isR&&!isY&&!isG)continue;
     const cx=Math.min(Math.floor(px/cW),G-1);
     const cy=Math.min(Math.floor(py/cH),G-1);
-    S[cy*G+cx]+=sat*mx;
+    S[cy*G+cx]+=sat*sat*(mx/255);        // sat² → 순수 색상일수록 급격히 높아짐
   }
 
-  // 최고 점수 셀 찾기
-  let maxS=0,pi=0;
-  for(let i=0;i<G*G;i++)if(S[i]>maxS){maxS=S[i];pi=i;}
-  if(maxS<600)return null;
-
-  // 인접 셀 확장 (region growing)
-  const seedX=pi%G,seedY=Math.floor(pi/G);
+  // 각 핫셀에서 flood-fill → 클러스터마다 밀도(density) 계산 → 가장 밀집된 것 선택
+  const THR=5;
   const used=new Uint8Array(G*G);
-  const q=[[seedX,seedY]];used[pi]=1;
-  let minX=seedX,maxX=seedX,minY=seedY,maxY=seedY,totalS=maxS;
-  const nbThr=Math.max(280,maxS*0.22);
   const dirs=[[-1,0],[1,0],[0,-1],[0,1]];
+  let best=null;
 
-  for(let qi=0;qi<q.length;qi++){
-    const cx=q[qi][0],cy=q[qi][1];
-    for(let di=0;di<4;di++){
-      const nx=cx+dirs[di][0],ny=cy+dirs[di][1];
-      if(nx<0||nx>=G||ny<0||ny>=G)continue;
-      const ni=ny*G+nx;
-      if(used[ni]||S[ni]<nbThr)continue;
-      used[ni]=1;q.push([nx,ny]);
-      if(nx<minX)minX=nx;if(nx>maxX)maxX=nx;
-      if(ny<minY)minY=ny;if(ny>maxY)maxY=ny;
-      totalS+=S[ni];
+  for(let si=0;si<G*G;si++){
+    if(used[si]||S[si]<THR)continue;
+    const q=[si];used[si]=1;
+    let minX=si%G,maxX=si%G,minY=Math.floor(si/G),maxY=Math.floor(si/G);
+    let total=S[si],cnt=1;
+    for(let qi=0;qi<q.length;qi++){
+      const ci=q[qi],cx=ci%G,cy=Math.floor(ci/G);
+      for(let di=0;di<4;di++){
+        const nx=cx+dirs[di][0],ny=cy+dirs[di][1];
+        if(nx<0||nx>=G||ny<0||ny>=G)continue;
+        const ni=ny*G+nx;
+        if(used[ni]||S[ni]<THR*0.4)continue;
+        used[ni]=1;q.push(ni);
+        if(nx<minX)minX=nx;if(nx>maxX)maxX=nx;
+        if(ny<minY)minY=ny;if(ny>maxY)maxY=ny;
+        total+=S[ni];cnt++;
+      }
     }
+    // 화면의 30% 이상 차지하면 신호등이 아님 (큰 색상 물체 제외)
+    if(cnt>G*G*0.3)continue;
+    const density=total/cnt;
+    if(!best||density>best.density)
+      best={minX,maxX,minY,maxY,density};
   }
 
-  // 방향 결정
-  const clW=maxX-minX+1,clH=maxY-minY+1;
+  if(!best)return null;
+
+  const clW=best.maxX-best.minX+1,clH=best.maxY-best.minY+1;
   let o=orientMode==='auto'
     ?(clW>clH*1.4?'h':clH>clW*1.4?'v':'h')
     :orientMode;
 
-  // 한 불만 켜진 경우에도 ROI가 신호등 전체를 커버하도록 확장
   const p=1;
-  if(o==='h'){maxX=Math.min(G-1,Math.max(maxX,minX+4));}
-  else       {maxY=Math.min(G-1,Math.max(maxY,minY+3));}
+  let {minX,maxX,minY,maxY}=best;
+  if(o==='h')maxX=Math.min(G-1,Math.max(maxX,minX+4));
+  else        maxY=Math.min(G-1,Math.max(maxY,minY+3));
 
   return{
     x:Math.floor(Math.max(0,minX-p)*cW),
     y:Math.floor(Math.max(0,minY-p)*cH),
     w:Math.floor((maxX-minX+1+p*2)*cW),
     h:Math.floor((maxY-minY+1+p*2)*cH),
-    score:totalS,orient:o
+    score:best.density,orient:o
   };
 }
 
