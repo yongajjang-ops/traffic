@@ -368,7 +368,11 @@ function detect(imgData,cw,ch){
 function r2s(r){
   if(!r)return null;
   const ar=area.getBoundingClientRect();
-  return{x:r.x*(ar.width/canvas.width),y:r.y*(ar.height/canvas.height),w:r.w*(ar.width/canvas.width),h:r.h*(ar.height/canvas.height)};
+  const dw=ar.width,dh=ar.height,vw=canvas.width,vh=canvas.height;
+  // object-fit:cover — uniform scale + center crop
+  const scale=Math.max(dw/vw,dh/vh);
+  const ox=(vw*scale-dw)/2,oy=(vh*scale-dh)/2;
+  return{x:r.x*scale-ox,y:r.y*scale-oy,w:r.w*scale,h:r.h*scale};
 }
 
 function updRoi(sr,state,o){
